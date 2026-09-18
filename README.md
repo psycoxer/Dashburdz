@@ -77,4 +77,4 @@ Colors prioritize a rich, cyberpunk-inspired palette—deep space backgrounds, g
 ---
 
 ## 📄 License
-This project is proprietary and built as a cutting-edge exploration into Flutter's rendering capabilities. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
