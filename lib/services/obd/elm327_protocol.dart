@@ -20,16 +20,19 @@ class Elm327Protocol {
   // ── PID Definitions (Service 01) ──
 
   static const String pidRpm = '010C';
+  static const String pidSpeed = '010D';
   static const String pidEngineOilTemp = '015C';
   static const String pidThrottlePos = '0111';
-  static const String pidSpeed = '010D';
   static const String pidIntakeAirTemp = '010F';
+  static const String pidEngineLoad = '0104';
 
   /// Ordered list of PIDs to poll in round-robin.
   /// We prioritize RPM and Speed for smooth gauge sweeps.
   static const List<String> pollSequence = [
     pidRpm,
     pidSpeed,
+    pidRpm,
+    pidEngineLoad,
     pidRpm,
     pidThrottlePos,
     pidRpm,
@@ -49,6 +52,7 @@ class Elm327Protocol {
     pidThrottlePos: 'Throttle Position',
     pidSpeed: 'Vehicle Speed',
     pidIntakeAirTemp: 'Intake Air Temperature',
+    pidEngineLoad: 'Engine Load',
   };
 
   // ── Response Parsing ──
@@ -128,6 +132,12 @@ class Elm327Protocol {
           if (remaining.length < 2) return null;
           final a = int.parse(remaining.substring(0, 2), radix: 16);
           return a - 40.0;
+          
+        case pidEngineLoad:
+          // Formula: A * 100 / 255
+          if (remaining.length < 2) return null;
+          final a = int.parse(remaining.substring(0, 2), radix: 16);
+          return (a * 100.0) / 255.0;
 
         default:
           return null;
@@ -157,6 +167,9 @@ class Elm327Protocol {
       case pidIntakeAirTemp:
         final a = (value + 40).round().clamp(0, 255);
         return '410F${a.toRadixString(16).padLeft(2, '0')}'.toUpperCase();
+      case pidEngineLoad:
+        final a = (value * 255 / 100).round().clamp(0, 255);
+        return '4104${a.toRadixString(16).padLeft(2, '0')}'.toUpperCase();
       default:
         return '';
     }

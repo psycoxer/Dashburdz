@@ -1,17 +1,20 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
+import '../../models/tile_shape.dart';
 import '../../theme/colors.dart';
 import '../../utils/constants.dart';
 
-/// Vertical fill bar for throttle position with sage green accent.
+/// Vertical or horizontal bar gauge for throttle position.
 class ThrottleDisplay extends StatelessWidget {
-  final double throttle; // 0–100%
-  final bool compact;
+  final double throttle;
+  final TileShape shape;
 
   const ThrottleDisplay({
     super.key,
     required this.throttle,
-    this.compact = false,
+    this.shape = TileShape.square,
   });
 
   @override
@@ -19,69 +22,135 @@ class ThrottleDisplay extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final height = constraints.maxHeight;
-
-        return Row(
-          children: [
-            // Bar
-            Expanded(
-              flex: compact ? 1 : 2,
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  vertical: compact ? 4 : 12,
-                  horizontal: compact ? 2 : 8,
-                ),
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(end: throttle / 100.0),
-                  duration: AppConstants.gaugeAnimDuration,
-                  curve: Curves.easeOutCubic,
-                  builder: (context, fraction, _) {
-                    return CustomPaint(
-                      size: Size(width, height),
-                      painter: _ThrottleBarPainter(
-                        fraction: fraction,
-                        isDark: isDark,
-                        compact: compact,
-                      ),
-                    );
-                  },
+    if (shape == TileShape.chip) {
+      return TweenAnimationBuilder<double>(
+        tween: Tween(end: throttle),
+        duration: AppConstants.gaugeAnimDuration,
+        curve: Curves.easeOutCubic,
+        builder: (context, val, _) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.gamepad, size: 16, color: AppColors.sage),
+              const SizedBox(width: 4),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '${val.toStringAsFixed(0)}%',
+                    style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            ),
-            // Readout
-            if (!compact)
-              Expanded(
-                flex: 3,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+            ],
+          );
+        },
+      );
+    }
+
+    final isWide = shape == TileShape.wide;
+    final isHero = shape == TileShape.hero || shape == TileShape.tall;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (isWide) {
+          // Horizontal layout
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    Text('THR %', style: theme.textTheme.titleSmall),
                     TweenAnimationBuilder<double>(
                       tween: Tween(end: throttle),
                       duration: AppConstants.gaugeAnimDuration,
                       curve: Curves.easeOutCubic,
                       builder: (context, val, _) {
-                        return Text(
-                          val.toStringAsFixed(0),
-                          style: theme.textTheme.displaySmall,
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            val.toStringAsFixed(0),
+                            style: theme.textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         );
                       },
                     ),
-                    Text('%', style: theme.textTheme.labelMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      'THROTTLE',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontSize: 9,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(end: throttle),
+                  duration: AppConstants.gaugeAnimDuration,
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animatedThrottle, _) {
+                    return CustomPaint(
+                      size: Size(constraints.maxWidth * 0.9, 20),
+                      painter: _ThrottleBarPainter(
+                        throttle: animatedThrottle,
+                        isDark: isDark,
+                        isHorizontal: true,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Vertical layout
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(end: throttle),
+                    duration: AppConstants.gaugeAnimDuration,
+                    curve: Curves.easeOutCubic,
+                    builder: (context, val, _) {
+                      return FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          val.toStringAsFixed(0),
+                          style: theme.textTheme.displayMedium?.copyWith(
+                            fontSize: isHero ? 42 : 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  Text('THR %', style: theme.textTheme.titleSmall),
+                ],
               ),
+            ),
+            const SizedBox(width: 16),
+            TweenAnimationBuilder<double>(
+              tween: Tween(end: throttle),
+              duration: AppConstants.gaugeAnimDuration,
+              curve: Curves.easeOutCubic,
+              builder: (context, animatedThrottle, _) {
+                return CustomPaint(
+                  size: Size(24, constraints.maxHeight * (isHero ? 0.8 : 0.6)),
+                  painter: _ThrottleBarPainter(
+                    throttle: animatedThrottle,
+                    isDark: isDark,
+                    isHorizontal: false,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 16),
           ],
         );
       },
@@ -90,61 +159,54 @@ class ThrottleDisplay extends StatelessWidget {
 }
 
 class _ThrottleBarPainter extends CustomPainter {
-  final double fraction; // 0–1
+  final double throttle;
   final bool isDark;
-  final bool compact;
+  final bool isHorizontal;
 
   _ThrottleBarPainter({
-    required this.fraction,
+    required this.throttle,
     required this.isDark,
-    required this.compact,
+    required this.isHorizontal,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final barWidth = compact ? size.width * 0.6 : size.width * 0.5;
-    final barHeight = size.height;
-    final left = (size.width - barWidth) / 2;
-    final borderRadius = barWidth / 2;
+    final rect = Offset.zero & size;
+    final radius = Radius.circular(isHorizontal ? size.height / 2 : size.width / 2);
 
-    // Background
-    final bgRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(left, 0, barWidth, barHeight),
-      Radius.circular(borderRadius),
-    );
+    // Background track
     canvas.drawRRect(
-      bgRect,
-      Paint()
-        ..color = isDark ? AppColors.darkSurfaceVariant : AppColors.lightSurfaceVariant,
+      RRect.fromRectAndRadius(rect, radius),
+      Paint()..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05),
     );
 
-    // Filled portion (from bottom)
-    final fillHeight = barHeight * fraction;
-    if (fillHeight > 1) {
-      final fillRect = RRect.fromRectAndCorners(
-        Rect.fromLTWH(left, barHeight - fillHeight, barWidth, fillHeight),
-        bottomLeft: Radius.circular(borderRadius),
-        bottomRight: Radius.circular(borderRadius),
-        topLeft: Radius.circular(fillHeight > barHeight * 0.9 ? borderRadius : 4),
-        topRight: Radius.circular(fillHeight > barHeight * 0.9 ? borderRadius : 4),
-      );
+    // Fill bar
+    final progress = (throttle / 100).clamp(0.0, 1.0);
+    if (progress > 0) {
+      final fillRect = isHorizontal
+          ? Rect.fromLTRB(0, 0, size.width * progress, size.height)
+          : Rect.fromLTRB(0, size.height - (size.height * progress), size.width, size.height);
 
-      final gradient = LinearGradient(
-        begin: Alignment.bottomCenter,
-        end: Alignment.topCenter,
-        colors: isDark
-            ? [AppColors.sageDark.withValues(alpha: 0.6), AppColors.sageDark]
-            : [AppColors.sageMuted, AppColors.sage],
-      );
+      final paint = Paint();
+      paint.shader = LinearGradient(
+        begin: isHorizontal ? Alignment.centerLeft : Alignment.bottomCenter,
+        end: isHorizontal ? Alignment.centerRight : Alignment.topCenter,
+        colors: [
+          AppColors.sageMuted,
+          AppColors.sage,
+          Colors.orangeAccent, // High throttle gets orange
+        ],
+        stops: const [0.0, 0.6, 1.0],
+      ).createShader(rect); // Map gradient to full bar
 
       canvas.drawRRect(
-        fillRect,
-        Paint()..shader = gradient.createShader(fillRect.outerRect),
+        RRect.fromRectAndRadius(fillRect, radius),
+        paint,
       );
     }
   }
 
   @override
   bool shouldRepaint(covariant _ThrottleBarPainter old) =>
-      old.fraction != fraction || old.isDark != isDark;
+      old.throttle != throttle || old.isDark != isDark || old.isHorizontal != isHorizontal;
 }

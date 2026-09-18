@@ -5,6 +5,7 @@ class VehicleData {
   final double engineOilTemp; // °C
   final double throttlePosition; // 0–100 %
   final double intakeAirTemp; // °C
+  final double engineLoad; // 0-100 %
   final DateTime timestamp;
 
   const VehicleData({
@@ -13,6 +14,7 @@ class VehicleData {
     required this.engineOilTemp,
     required this.throttlePosition,
     required this.intakeAirTemp,
+    required this.engineLoad,
     required this.timestamp,
   });
 
@@ -23,6 +25,7 @@ class VehicleData {
     engineOilTemp: 25,
     throttlePosition: 0,
     intakeAirTemp: 25,
+    engineLoad: 0,
     timestamp: DateTime.now(),
   );
 
@@ -32,6 +35,7 @@ class VehicleData {
     double? engineOilTemp,
     double? throttlePosition,
     double? intakeAirTemp,
+    double? engineLoad,
     DateTime? timestamp,
   }) {
     return VehicleData(
@@ -40,6 +44,7 @@ class VehicleData {
       engineOilTemp: engineOilTemp ?? this.engineOilTemp,
       throttlePosition: throttlePosition ?? this.throttlePosition,
       intakeAirTemp: intakeAirTemp ?? this.intakeAirTemp,
+      engineLoad: engineLoad ?? this.engineLoad,
       timestamp: timestamp ?? this.timestamp,
     );
   }
@@ -51,6 +56,7 @@ class VehicleData {
       'engine_oil_temp': engineOilTemp,
       'throttle_position': throttlePosition,
       'intake_air_temp': intakeAirTemp,
+      'engine_load': engineLoad,
       'timestamp': timestamp.toIso8601String(),
     };
   }
@@ -62,6 +68,7 @@ class VehicleData {
       engineOilTemp: (map['engine_oil_temp'] as num).toDouble(),
       throttlePosition: (map['throttle_position'] as num).toDouble(),
       intakeAirTemp: (map['intake_air_temp'] as num).toDouble(),
+      engineLoad: (map['engine_load'] as num?)?.toDouble() ?? 0.0,
       timestamp: DateTime.parse(map['timestamp'] as String),
     );
   }
@@ -70,5 +77,5 @@ class VehicleData {
   String toString() =>
       'VehicleData(rpm: ${rpm.toStringAsFixed(0)}, speed: ${speed.toStringAsFixed(0)}, '
       'engineOil: ${engineOilTemp.toStringAsFixed(1)}°C, throttle: ${throttlePosition.toStringAsFixed(1)}%, '
-      'intake: ${intakeAirTemp.toStringAsFixed(1)}°C)';
+      'load: ${engineLoad.toStringAsFixed(1)}%)';
 }

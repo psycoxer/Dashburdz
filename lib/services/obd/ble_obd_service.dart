@@ -35,6 +35,7 @@ class BleObdService extends ObdService {
   double _engineOilTemp = 25;
   double _throttlePos = 0;
   double _intakeAirTemp = 25;
+  double _engineLoad = 0;
 
   /// Raw PID log for the debug panel.
   List<Map<String, String>> get rawLog => List.unmodifiable(_rawLog);
@@ -142,6 +143,8 @@ class BleObdService extends ObdService {
               _speed = value;
             case Elm327Protocol.pidIntakeAirTemp:
               _intakeAirTemp = value;
+            case Elm327Protocol.pidEngineLoad:
+              _engineLoad = value;
           }
 
           // Emit raw data directly (UI handles smoothing via TweenAnimationBuilder)
@@ -151,6 +154,7 @@ class BleObdService extends ObdService {
             engineOilTemp: _engineOilTemp,
             throttlePosition: _throttlePos,
             intakeAirTemp: _intakeAirTemp,
+            engineLoad: _engineLoad,
             timestamp: DateTime.now(),
           ));
         }

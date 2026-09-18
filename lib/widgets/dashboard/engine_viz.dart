@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
+import '../../models/tile_shape.dart';
 import '../../theme/colors.dart';
 
 /// Pseudo-3D animated single-cylinder engine visualization with Gyro effect.
@@ -15,8 +16,15 @@ import '../../theme/colors.dart';
 /// - Air-cooling fins on the cylinder.
 class EngineViz extends StatefulWidget {
   final double rpm;
+  final double engineLoad;
+  final TileShape shape;
 
-  const EngineViz({super.key, required this.rpm});
+  const EngineViz({
+    super.key, 
+    required this.rpm, 
+    required this.engineLoad,
+    this.shape = TileShape.tall,
+  });
 
   @override
   State<EngineViz> createState() => _EngineVizState();
@@ -79,6 +87,21 @@ class _EngineVizState extends State<EngineViz>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.shape == TileShape.chip) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.settings, size: 16, color: AppColors.lavender),
+          const SizedBox(width: 4),
+          Text(
+            '${widget.engineLoad.toStringAsFixed(0)}% LD',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
+      );
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return LayoutBuilder(
@@ -107,6 +130,7 @@ class _EngineVizState extends State<EngineViz>
                   isDark: isDark,
                   pitch: _pitch,
                   roll: _roll,
+                  engineLoad: widget.engineLoad,
                 ),
               ),
             );
@@ -122,12 +146,14 @@ class _EnginePainter extends CustomPainter {
   final bool isDark;
   final double pitch;
   final double roll;
+  final double engineLoad;
 
   _EnginePainter({
     required this.crankAngle,
     required this.isDark,
     required this.pitch,
     required this.roll,
+    required this.engineLoad,
   });
 
   @override
@@ -181,16 +207,38 @@ class _EnginePainter extends CustomPainter {
 
     // ── Cylinder bore ──
     final boreTop = cy - boreH / 2;
+    // Glow color based on engine load (0 to 100).
+    // Use an easing function to make high loads pop more
+    final glowIntensity = Curves.easeIn.transform((engineLoad / 100.0).clamp(0.0, 1.0));
+    final glowColor = Color.lerp(
+      AppColors.engineCylinder,
+      Colors.deepOrangeAccent,
+      glowIntensity,
+    )!;
+
+    // Draw intense radial glow behind cylinder when under load
+    if (glowIntensity > 0.05) {
+      final glowPaint = Paint()
+        ..color = Colors.deepOrangeAccent.withValues(alpha: glowIntensity * 0.6)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * 0.15);
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(cx, cy), width: boreW * 1.5, height: boreH * 1.5),
+        glowPaint,
+      );
+    }
+
     _drawPremiumBlock(
       canvas,
       rect: Rect.fromLTWH(cx - boreW / 2, boreTop, boreW, boreH),
-      color: AppColors.engineCylinder,
+      color: glowColor,
       skew: skew * 0.7,
       borderRadius: scale * 0.02,
     );
 
     // ── Cooling fins ──
-    final finColor = isDark ? AppColors.lavenderLight : AppColors.engineFin;
+    final baseFinColor = isDark ? AppColors.lavenderLight : AppColors.engineFin;
+    final finColor = Color.lerp(baseFinColor, Colors.orangeAccent, glowIntensity)!;
+    
     final finPaint = Paint()
       ..strokeWidth = max(1.5, scale * 0.015)
       ..strokeCap = StrokeCap.round;
@@ -405,5 +453,6 @@ class _EnginePainter extends CustomPainter {
       old.crankAngle != crankAngle || 
       old.isDark != isDark ||
       old.pitch != pitch ||
-      old.roll != roll;
+      old.roll != roll ||
+      old.engineLoad != engineLoad;
 }

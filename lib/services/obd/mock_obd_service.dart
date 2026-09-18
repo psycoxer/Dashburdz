@@ -24,6 +24,7 @@ class MockObdService extends ObdService {
   double _engineOil = 25;
   double _throttle = 0;
   double _intakeAir = 30;
+  double _engineLoad = 0;
 
   @override
   Stream<VehicleData> get vehicleDataStream => _controller.stream;
@@ -78,6 +79,7 @@ class MockObdService extends ObdService {
     if (cmd == '0111') return _fakeHexResponse('throttle');
     if (cmd == '010D') return _fakeHexResponse('speed');
     if (cmd == '010F') return _fakeHexResponse('intake');
+    if (cmd == '0104') return _fakeHexResponse('load');
 
     return 'NO DATA';
   }
@@ -97,6 +99,7 @@ class MockObdService extends ObdService {
       engineOilTemp: _engineOil,
       throttlePosition: _throttle,
       intakeAirTemp: _intakeAir,
+      engineLoad: _engineLoad,
       timestamp: DateTime.now(),
     );
 
@@ -115,6 +118,9 @@ class MockObdService extends ObdService {
     // ── Intake air: slowly changes with ambient + engine heat ──
     _intakeAir = 30 + 5 * sin(_simTime * 0.05) + (_engineOil > 60 ? 5 : 0);
 
+    // ── Engine Load: closely follows throttle but with some lag and curve ──
+    _engineLoad = _lerp(_engineLoad, _throttle * 0.8 + (_rpm / 10000.0) * 20, 0.1);
+
     // ── Riding pattern: cycles through phases ──
     // Phase repeats every 60 seconds:
     //   0–15s: idle/low RPM (warmup/normal)
@@ -129,12 +135,12 @@ class MockObdService extends ObdService {
       _throttle = _lerp(_throttle, 5 + 3 * sin(_simTime * 0.3), 0.05);
       _speed = _lerp(_speed, 0 + 10 * max(0, sin(_simTime * 0.2)), 0.03);
     } else if (phase < 35) {
-      // Cruising
-      _rpm = _lerp(_rpm, 3500 + 500 * sin(_simTime * 0.3), 0.04);
-      _throttle = _lerp(_throttle, 30 + 10 * sin(_simTime * 0.2), 0.04);
-      _speed = _lerp(_speed, 50 + 15 * sin(_simTime * 0.15), 0.03);
+      // Cruising (Touring mode territory: Speed > 70, low throttle)
+      _rpm = _lerp(_rpm, 4000 + 300 * sin(_simTime * 0.3), 0.04);
+      _throttle = _lerp(_throttle, 25 + 5 * sin(_simTime * 0.2), 0.04);
+      _speed = _lerp(_speed, 75 + 10 * sin(_simTime * 0.15), 0.03);
     } else if (phase < 50) {
-      // Spirited riding — push into power mode
+      // Spirited riding — push into power mode (high RPM, high throttle)
       _rpm = _lerp(_rpm, 7000 + 1000 * sin(_simTime * 0.5), 0.06);
       _throttle = _lerp(_throttle, 80 + 15 * sin(_simTime * 0.4), 0.06);
       _speed = _lerp(_speed, 90 + 20 * sin(_simTime * 0.2), 0.04);
@@ -151,6 +157,7 @@ class MockObdService extends ObdService {
     _engineOil = _engineOil.clamp(-10, 130);
     _throttle = _throttle.clamp(0, 100);
     _intakeAir = _intakeAir.clamp(-10, 80);
+    _engineLoad = _engineLoad.clamp(0, 100);
   }
 
   void _addNoise() {
@@ -160,6 +167,7 @@ class MockObdService extends ObdService {
     _engineOil += (_rng.nextDouble() - 0.5) * 1.5;
     _throttle += (_rng.nextDouble() - 0.5) * 4;
     _intakeAir += (_rng.nextDouble() - 0.5) * 1;
+    _engineLoad += (_rng.nextDouble() - 0.5) * 5;
   }
 
   double _lerp(double current, double target, double t) {
@@ -181,6 +189,8 @@ class MockObdService extends ObdService {
         return '410D${_hex(_speed.round().clamp(0, 255))}';
       case 'intake':
         return '410F${_hex((_intakeAir + 40).round().clamp(0, 255))}';
+      case 'load':
+        return '4104${_hex((_engineLoad * 255 / 100).round().clamp(0, 255))}';
       default:
         return 'NO DATA';
     }

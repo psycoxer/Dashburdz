@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/tile_shape.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/constants.dart';
 
@@ -13,6 +14,7 @@ class MetricTile extends StatelessWidget {
   final String? label;
   final Color? accentColor;
   final bool showLabel;
+  final TileShape shape;
 
   const MetricTile({
     super.key,
@@ -20,6 +22,7 @@ class MetricTile extends StatelessWidget {
     this.label,
     this.accentColor,
     this.showLabel = true,
+    this.shape = TileShape.square,
   });
 
   @override
@@ -27,12 +30,17 @@ class MetricTile extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Chips get fully rounded pill shapes, others get standard squircle.
+    final borderRadius = shape == TileShape.chip 
+        ? BorderRadius.circular(100) 
+        : BorderRadius.circular(AppConstants.tileBorderRadius);
+
     return AnimatedContainer(
       duration: AppConstants.modeSwitchDuration,
       curve: Curves.easeInOutCubic,
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor(context),
-        borderRadius: BorderRadius.circular(AppConstants.tileBorderRadius),
+        borderRadius: borderRadius,
         border: Border.all(
           color: accentColor?.withValues(alpha: 0.15) ??
               theme.dividerColor.withValues(alpha: 0.3),
@@ -40,16 +48,16 @@ class MetricTile extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: (isDark ? Colors.black : Colors.black).withValues(alpha: isDark ? 0.2 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppConstants.tileBorderRadius),
+        borderRadius: borderRadius,
         child: Padding(
-          padding: const EdgeInsets.all(AppConstants.tilePadding),
+          padding: EdgeInsets.all(shape == TileShape.chip ? 8.0 : AppConstants.tilePadding),
           child: child,
         ),
       ),

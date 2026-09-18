@@ -2,24 +2,49 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../models/tile_shape.dart';
 import '../../theme/colors.dart';
 import '../../utils/constants.dart';
 
 /// Arc gauge for vehicle speed with sage green accent.
 class SpeedGauge extends StatelessWidget {
   final double speed;
-  final bool compact;
+  final TileShape shape;
 
   const SpeedGauge({
     super.key,
     required this.speed,
-    this.compact = false,
+    this.shape = TileShape.square,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    if (shape == TileShape.chip) {
+      return TweenAnimationBuilder<double>(
+        tween: Tween(end: speed),
+        duration: AppConstants.gaugeAnimDuration,
+        curve: Curves.easeOutCubic,
+        builder: (context, val, _) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.directions_bike, size: 16, color: AppColors.sage),
+              const SizedBox(width: 4),
+              Text(
+                '${val.toStringAsFixed(0)} km/h',
+                style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    final isHero = shape == TileShape.hero;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -41,13 +66,14 @@ class SpeedGauge extends StatelessWidget {
                     painter: _SpeedGaugePainter(
                       speed: animatedSpeed,
                       isDark: isDark,
-                      compact: compact,
+                      shape: shape,
                     ),
                   );
                 },
               ),
-              if (!compact)
-                Column(
+              SizedBox(
+                width: size * 0.7,
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TweenAnimationBuilder<double>(
@@ -55,29 +81,25 @@ class SpeedGauge extends StatelessWidget {
                       duration: AppConstants.gaugeAnimDuration,
                       curve: Curves.easeOutCubic,
                       builder: (context, val, _) {
-                        return Text(
-                          val.toStringAsFixed(0),
-                          style: theme.textTheme.displayMedium,
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            val.toStringAsFixed(0),
+                            style: theme.textTheme.displayMedium?.copyWith(
+                              fontSize: isHero ? size * 0.35 : size * 0.25,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         );
                       },
                     ),
-                    Text('km/h', style: theme.textTheme.titleSmall),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('km/h', style: isHero ? theme.textTheme.titleMedium : theme.textTheme.titleSmall),
+                    ),
                   ],
-                )
-              else
-                TweenAnimationBuilder<double>(
-                  tween: Tween(end: speed),
-                  duration: AppConstants.gaugeAnimDuration,
-                  curve: Curves.easeOutCubic,
-                  builder: (context, val, _) {
-                    return Text(
-                      val.toStringAsFixed(0),
-                      style: theme.textTheme.displaySmall?.copyWith(
-                        fontSize: size * 0.25,
-                      ),
-                    );
-                  },
                 ),
+              ),
             ],
           ),
         );
@@ -89,12 +111,12 @@ class SpeedGauge extends StatelessWidget {
 class _SpeedGaugePainter extends CustomPainter {
   final double speed;
   final bool isDark;
-  final bool compact;
+  final TileShape shape;
 
   _SpeedGaugePainter({
     required this.speed,
     required this.isDark,
-    required this.compact,
+    required this.shape,
   });
 
   static const double _startAngle = 135 * pi / 180;
@@ -104,7 +126,10 @@ class _SpeedGaugePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2 * 0.85;
-    final strokeWidth = compact ? size.width * 0.06 : size.width * 0.05;
+    final strokeWidth = shape == TileShape.hero ? size.width * 0.05 : size.width * 0.06;
+    final isHero = shape == TileShape.hero;
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
     // Background arc
     final bgPaint = Paint()
@@ -114,7 +139,7 @@ class _SpeedGaugePainter extends CustomPainter {
       ..color = isDark ? AppColors.darkSurfaceVariant : AppColors.lightSurfaceVariant;
 
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
+      rect,
       _startAngle,
       _sweepAngle,
       false,
@@ -129,15 +154,16 @@ class _SpeedGaugePainter extends CustomPainter {
         ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.round
         ..shader = SweepGradient(
-          startAngle: _startAngle,
-          endAngle: _startAngle + _sweepAngle,
+          startAngle: 0.0,
+          endAngle: _sweepAngle,
           colors: isDark
               ? [AppColors.sageDark.withValues(alpha: 0.5), AppColors.sageDark]
               : [AppColors.sageMuted, AppColors.sage],
-        ).createShader(Rect.fromCircle(center: center, radius: radius));
+          transform: const GradientRotation(_startAngle),
+        ).createShader(rect);
 
       canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
+        rect,
         _startAngle,
         _sweepAngle * fraction,
         false,
@@ -146,7 +172,7 @@ class _SpeedGaugePainter extends CustomPainter {
     }
 
     // Tick marks
-    if (!compact) {
+    if (isHero || shape == TileShape.square) {
       final tickPaint = Paint()
         ..color = isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary
         ..strokeWidth = 1.5
@@ -165,32 +191,34 @@ class _SpeedGaugePainter extends CustomPainter {
           tickPaint,
         );
 
-        final labelR = radius - strokeWidth / 2 - 18;
-        final textSpan = TextSpan(
-          text: '${i * 20}',
-          style: TextStyle(
-            color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
-            fontSize: 8,
-            fontWeight: FontWeight.w500,
-          ),
-        );
-        final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)..layout();
-        tp.paint(
-          canvas,
-          Offset(
-            center.dx + labelR * cos(angle) - tp.width / 2,
-            center.dy + labelR * sin(angle) - tp.height / 2,
-          ),
-        );
+        if (isHero) {
+          final labelR = radius - strokeWidth / 2 - 22;
+          final textSpan = TextSpan(
+            text: '${i * 20}',
+            style: TextStyle(
+              color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          );
+          final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)..layout();
+          tp.paint(
+            canvas,
+            Offset(
+              center.dx + labelR * cos(angle) - tp.width / 2,
+              center.dy + labelR * sin(angle) - tp.height / 2,
+            ),
+          );
+        }
       }
     }
 
     // Needle
     final needleAngle = _startAngle + _sweepAngle * fraction;
-    final needleLength = radius * (compact ? 0.65 : 0.75);
+    final needleLength = radius * (isHero ? 0.75 : 0.65);
     final needlePaint = Paint()
       ..color = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary
-      ..strokeWidth = compact ? 2 : 2.5
+      ..strokeWidth = isHero ? 2.5 : 2
       ..strokeCap = StrokeCap.round;
 
     canvas.drawLine(
@@ -205,12 +233,12 @@ class _SpeedGaugePainter extends CustomPainter {
     // Center dot
     canvas.drawCircle(
       center,
-      compact ? 3 : 5,
+      isHero ? 5 : 3,
       Paint()..color = isDark ? AppColors.sageDark : AppColors.sage,
     );
   }
 
   @override
   bool shouldRepaint(covariant _SpeedGaugePainter old) =>
-      old.speed != speed || old.isDark != isDark;
+      old.speed != speed || old.isDark != isDark || old.shape != shape;
 }

@@ -2,31 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/riding_mode.dart';
+import '../../models/tile_shape.dart';
 import '../../models/vehicle_data.dart';
 import '../../providers/obd_provider.dart';
 import '../../providers/riding_mode_provider.dart';
 import '../../theme/colors.dart';
 import '../../utils/constants.dart';
+import 'clock_tile.dart';
 import 'engine_viz.dart';
 import 'metric_tile.dart';
+import 'music_tile.dart';
 import 'rpm_gauge.dart';
 import 'speed_gauge.dart';
+import 'status_chip.dart';
 import 'temp_ring.dart';
 import 'throttle_display.dart';
 
-/// The 6 dashboard tile types.
-enum _Tile { rpm, speed, engineOil, intakeAir, throttle, engine }
+enum _Tile { rpm, speed, engineOil, intakeAir, throttle, engine, status, clock, music }
 
-/// Layout spec for a single tile: position and size as fractions of container.
 class _TileLayout {
   final double left, top, width, height;
-  const _TileLayout(this.left, this.top, this.width, this.height);
+  final TileShape shape;
+  const _TileLayout(this.left, this.top, this.width, this.height, this.shape);
 }
 
-/// Animated grid that repositions and resizes tiles based on [RidingMode].
-///
-/// Each tile smoothly moves to its new position/size when the mode changes
-/// using [AnimatedPositioned] with easeInOutCubic curves.
 class TileGrid extends ConsumerWidget {
   const TileGrid({super.key});
 
@@ -44,7 +43,9 @@ class TileGrid extends ConsumerWidget {
 
         return Stack(
           children: _Tile.values.map((tile) {
-            final layout = layouts[tile]!;
+            final layout = layouts[tile];
+            if (layout == null) return const SizedBox.shrink();
+
             return AnimatedPositioned(
               key: ValueKey(tile),
               duration: AppConstants.modeSwitchDuration,
@@ -55,8 +56,9 @@ class TileGrid extends ConsumerWidget {
               height: layout.height * h - gap,
               child: AnimatedOpacity(
                 duration: AppConstants.modeSwitchDuration,
-                opacity: 1.0,
-                child: _buildTile(tile, data, mode),
+                // Hide tile if width/height is 0
+                opacity: (layout.width == 0 || layout.height == 0) ? 0.0 : 1.0,
+                child: _buildTile(tile, data, layout.shape),
               ),
             );
           }).toList(),
@@ -65,66 +67,69 @@ class TileGrid extends ConsumerWidget {
     );
   }
 
-  Widget _buildTile(_Tile tile, VehicleData data, RidingMode mode) {
-    final compact = _isCompact(tile, mode);
-
+  Widget _buildTile(_Tile tile, VehicleData data, TileShape shape) {
     switch (tile) {
       case _Tile.rpm:
         return MetricTile(
+          shape: shape,
           accentColor: AppColors.lavender,
-          child: RpmGauge(rpm: data.rpm, compact: compact),
+          child: RpmGauge(rpm: data.rpm, shape: shape),
         );
       case _Tile.speed:
         return MetricTile(
+          shape: shape,
           accentColor: AppColors.sage,
-          child: SpeedGauge(speed: data.speed, compact: compact),
+          child: SpeedGauge(speed: data.speed, shape: shape),
         );
       case _Tile.engineOil:
         return MetricTile(
+          shape: shape,
           accentColor: AppColors.coral,
           child: TempRing(
             temperature: data.engineOilTemp,
             label: 'OIL TEMP',
             isEngineOil: true,
-            compact: compact,
+            shape: shape,
           ),
         );
       case _Tile.intakeAir:
         return MetricTile(
+          shape: shape,
           accentColor: AppColors.skyBlue,
           child: TempRing(
             temperature: data.intakeAirTemp,
             label: 'INTAKE',
             isEngineOil: false,
-            compact: compact,
+            shape: shape,
           ),
         );
       case _Tile.throttle:
         return MetricTile(
+          shape: shape,
           accentColor: AppColors.sage,
-          child: ThrottleDisplay(throttle: data.throttlePosition, compact: compact),
+          child: ThrottleDisplay(throttle: data.throttlePosition, shape: shape),
         );
       case _Tile.engine:
         return MetricTile(
+          shape: shape,
           accentColor: AppColors.lavender,
-          child: EngineViz(rpm: data.rpm),
+          child: EngineViz(rpm: data.rpm, engineLoad: data.engineLoad, shape: shape),
         );
-    }
-  }
-
-  bool _isCompact(_Tile tile, RidingMode mode) {
-    switch (mode) {
-      case RidingMode.warmup:
-        return tile == _Tile.rpm ||
-            tile == _Tile.speed ||
-            tile == _Tile.throttle;
-      case RidingMode.normal:
-        return tile == _Tile.intakeAir;
-      case RidingMode.power:
-        return tile == _Tile.speed ||
-            tile == _Tile.engineOil ||
-            tile == _Tile.intakeAir ||
-            tile == _Tile.engine;
+      case _Tile.status:
+        // Status chip does not need a MetricTile wrapper since it's already a chip
+        return const Align(alignment: Alignment.topLeft, child: StatusChip());
+      case _Tile.clock:
+        return MetricTile(
+          shape: shape,
+          accentColor: AppColors.skyBlue,
+          child: ClockTile(shape: shape),
+        );
+      case _Tile.music:
+        return MetricTile(
+          shape: shape,
+          accentColor: AppColors.lavender,
+          child: MusicTile(shape: shape),
+        );
     }
   }
 
@@ -133,50 +138,59 @@ class TileGrid extends ConsumerWidget {
     switch (mode) {
       case RidingMode.warmup:
         return {
-          // Engine viz: left, full height
-          _Tile.engine:   const _TileLayout(0.0,  0.0,  0.38, 1.0),
-          // EngineOil: right-top, large
-          _Tile.engineOil:  const _TileLayout(0.39, 0.0,  0.30, 0.58),
-          // Intake air: far right top
-          _Tile.intakeAir:const _TileLayout(0.70, 0.0,  0.30, 0.58),
-          // RPM: bottom-left of right area
-          _Tile.rpm:      const _TileLayout(0.39, 0.60, 0.20, 0.40),
-          // Speed: bottom-center
-          _Tile.speed:    const _TileLayout(0.60, 0.60, 0.20, 0.40),
-          // Throttle: bottom-right
-          _Tile.throttle: const _TileLayout(0.81, 0.60, 0.19, 0.40),
+          _Tile.status:    const _TileLayout(0.00, 0.00, 0.25, 0.10, TileShape.chip),
+          _Tile.clock:     const _TileLayout(0.25, 0.00, 0.25, 0.10, TileShape.chip),
+          _Tile.engine:    const _TileLayout(0.00, 0.10, 0.30, 0.90, TileShape.tall),
+          
+          _Tile.engineOil: const _TileLayout(0.30, 0.10, 0.25, 0.45, TileShape.square),
+          _Tile.intakeAir: const _TileLayout(0.55, 0.10, 0.25, 0.45, TileShape.square),
+          _Tile.throttle:  const _TileLayout(0.80, 0.10, 0.20, 0.45, TileShape.tall),
+          
+          _Tile.rpm:       const _TileLayout(0.30, 0.55, 0.35, 0.45, TileShape.square),
+          _Tile.speed:     const _TileLayout(0.65, 0.55, 0.35, 0.45, TileShape.square),
+          
+          _Tile.music:     const _TileLayout(0.00, 0.00, 0.00, 0.00, TileShape.chip), // hidden
         };
 
       case RidingMode.normal:
         return {
-          // RPM: left, large
-          _Tile.rpm:      const _TileLayout(0.0,  0.0,  0.30, 0.58),
-          // Speed: center-left, large
-          _Tile.speed:    const _TileLayout(0.31, 0.0,  0.30, 0.58),
-          // EngineOil: center-right
-          _Tile.engineOil:  const _TileLayout(0.62, 0.0,  0.22, 0.58),
-          // Intake air: far-right chip
-          _Tile.intakeAir:const _TileLayout(0.85, 0.0,  0.15, 0.40),
-          // Engine viz: bottom-left
-          _Tile.engine:   const _TileLayout(0.0,  0.60, 0.30, 0.40),
-          // Throttle: bottom-center
-          _Tile.throttle: const _TileLayout(0.31, 0.60, 0.30, 0.40),
+          _Tile.status:    const _TileLayout(0.00, 0.00, 0.30, 0.10, TileShape.chip),
+          _Tile.clock:     const _TileLayout(0.30, 0.00, 0.30, 0.10, TileShape.chip),
+          _Tile.rpm:       const _TileLayout(0.00, 0.10, 0.30, 0.50, TileShape.square),
+          _Tile.speed:     const _TileLayout(0.30, 0.10, 0.30, 0.50, TileShape.square),
+          _Tile.music:     const _TileLayout(0.60, 0.10, 0.40, 0.25, TileShape.wide),
+          _Tile.engineOil: const _TileLayout(0.60, 0.35, 0.20, 0.25, TileShape.square),
+          _Tile.intakeAir: const _TileLayout(0.80, 0.35, 0.20, 0.25, TileShape.square),
+          _Tile.engine:    const _TileLayout(0.00, 0.60, 0.30, 0.40, TileShape.square),
+          _Tile.throttle:  const _TileLayout(0.30, 0.60, 0.70, 0.40, TileShape.wide),
         };
 
       case RidingMode.power:
         return {
-          // RPM: hero, left
-          _Tile.rpm:      const _TileLayout(0.0,  0.0,  0.48, 0.66),
-          // Throttle: hero, right
-          _Tile.throttle: const _TileLayout(0.49, 0.0,  0.51, 0.66),
-          // Speed: chip bottom-left
-          _Tile.speed:    const _TileLayout(0.0,  0.68, 0.18, 0.32),
-          // EngineOil: chip
-          _Tile.engineOil:  const _TileLayout(0.19, 0.68, 0.15, 0.32),
-          // Engine: small bottom
-          _Tile.engine:   const _TileLayout(0.35, 0.68, 0.30, 0.32),
-          // Intake air: chip bottom-right
-          _Tile.intakeAir:const _TileLayout(0.66, 0.68, 0.15, 0.32),
+          _Tile.status:    const _TileLayout(0.00, 0.00, 0.30, 0.10, TileShape.chip),
+          _Tile.clock:     const _TileLayout(0.30, 0.00, 0.30, 0.10, TileShape.chip),
+          _Tile.rpm:       const _TileLayout(0.00, 0.10, 0.50, 0.70, TileShape.hero),
+          _Tile.throttle:  const _TileLayout(0.50, 0.10, 0.50, 0.35, TileShape.wide),
+          _Tile.speed:     const _TileLayout(0.50, 0.45, 0.25, 0.35, TileShape.square),
+          _Tile.music:     const _TileLayout(0.75, 0.45, 0.25, 0.35, TileShape.wide),
+          _Tile.engineOil: const _TileLayout(0.00, 0.80, 0.33, 0.20, TileShape.chip),
+          _Tile.intakeAir: const _TileLayout(0.33, 0.80, 0.33, 0.20, TileShape.chip),
+          _Tile.engine:    const _TileLayout(0.66, 0.80, 0.34, 0.20, TileShape.chip),
+        };
+
+      case RidingMode.touring:
+        return {
+          _Tile.status:    const _TileLayout(0.00, 0.00, 0.30, 0.10, TileShape.chip),
+          _Tile.rpm:       const _TileLayout(0.00, 0.10, 0.15, 0.15, TileShape.chip),
+          _Tile.throttle:  const _TileLayout(0.00, 0.25, 0.15, 0.15, TileShape.chip),
+          _Tile.engineOil: const _TileLayout(0.00, 0.40, 0.15, 0.15, TileShape.chip),
+          _Tile.intakeAir: const _TileLayout(0.00, 0.55, 0.15, 0.15, TileShape.chip),
+          _Tile.engine:    const _TileLayout(0.00, 0.70, 0.15, 0.30, TileShape.tall),
+          
+          _Tile.speed:     const _TileLayout(0.15, 0.00, 0.55, 1.00, TileShape.hero),
+          
+          _Tile.clock:     const _TileLayout(0.70, 0.00, 0.30, 0.35, TileShape.square),
+          _Tile.music:     const _TileLayout(0.70, 0.35, 0.30, 0.65, TileShape.tall),
         };
     }
   }
